@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Process</title>
+    <script src="js/Introspector.js"></script>
+    <script src="js/tools.js"></script>
+    <script src="js/wdw.js"></script>
+    <link rel="stylesheet" type="text/css" href="css/main.css"/>
+</head>
+<body>
+    <canvas id="myCanvas" class="canvas"></canvas>
+    <script>
+            var canvas = document.getElementById("myCanvas");
+            canvas.width = wdw.width;
+            canvas.height = wdw.height;
+            var ctx = canvas.ctx = canvas.getContext("2d");
+
+            canvas.clear = function(){
+                this.ctx.clearRect(0, 0, this.width, this.height);
+            }
+            canvas.drawImageFull = function(image){
+                if(image.ratio > wdw.ratio){
+                    ctx.drawImage(image, 0, (wdw.height - wdw.width/image.ratio) /2, wdw.width, wdw.width/image.ratio);
+                } else {
+                    ctx.drawImage(image, (wdw.width - wdw.height*image.ratio) / 2, 0, wdw.height*image.ratio, wdw.height);
+
+                }
+            }
+
+
+            var image = new Image();
+            image.src= 'images/2.jpg';
+            image.onload = function(){
+                image.ratio = image.width/image.height;
+
+                canvas.drawImageFull(image);
+//                ctx.drawImage(image, 0, 0, wdw.width, wdw.height);
+
+                image.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                image.pixels = image.imageData.data;
+                image.numPixels = image.imageData.width * image.imageData.height;
+
+                canvas.clear();
+                tools.negative(image);
+                ctx.putImageData(image.imageData, 0, 0);
+            }
+    </script>
+</body>
+</html>
