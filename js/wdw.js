@@ -13,6 +13,9 @@ wdw.compute = function(){
 };
 wdw.compute();
 
+wdw.onresize = function(){};
+
 window.onresize = function(){
     wdw.compute();
+    wdw.onresize();
 };

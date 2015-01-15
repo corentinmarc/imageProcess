@@ -3,6 +3,7 @@ var tools = {};
 
 // negative est une fonction qui permet d'obtenir le négatif d'une image.
 tools.negative = function(image){
+
     if( image.numPixels && image.pixels ){
         for (var i = 0; i < image.numPixels; i++) {
             image.pixels[i*4] = 255-image.pixels[i*4]; // Red

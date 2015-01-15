@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8"/>
     <title>Image Process</title>
     <script src="js/Introspector.js"></script>
     <script src="js/tools.js"></script>
@@ -10,40 +11,126 @@
 <body>
     <canvas id="myCanvas" class="canvas"></canvas>
     <script>
-            var canvas = document.getElementById("myCanvas");
-            canvas.width = wdw.width;
-            canvas.height = wdw.height;
-            var ctx = canvas.ctx = canvas.getContext("2d");
+            var _this = canvas = document.getElementById("myCanvas");
+            canvas.imageData = {};
+            canvas.zoom = 1;
+            canvas.position = {
+                x: 0, y: 0
+            };
+            canvas.allowedTypes = ['png', 'jpg', 'jpeg', 'gif'];
+            canvas.zoomSensibility = 0.1;
 
+            // Definition des methodes du canvas
+            canvas.compute = function(){
+                this.width = wdw.width;
+                this.height = wdw.height;
+            };
             canvas.clear = function(){
                 this.ctx.clearRect(0, 0, this.width, this.height);
-            }
-            canvas.drawImageFull = function(image){
-                if(image.ratio > wdw.ratio){
-                    ctx.drawImage(image, 0, (wdw.height - wdw.width/image.ratio) /2, wdw.width, wdw.width/image.ratio);
-                } else {
-                    ctx.drawImage(image, (wdw.width - wdw.height*image.ratio) / 2, 0, wdw.height*image.ratio, wdw.height);
+            };
+            canvas.addImage = function(img){
+                var c = document.createElement('canvas');
+                c.width = img.width;
+                c.height = img.height;
+                // Get imageData from img
+                c.getContext("2d").drawImage(img, 0, 0);
+                this.imageData = c.getContext("2d").getImageData(0, 0, c.width, c.height);
+                this.imageData.ratio = img.width / img.height;
+                this.imageData.pixels = this.imageData.data;
+                this.imageData.numPixels = this.imageData.width * this.imageData.height;
 
+                console.log(this.imageData);
+            };
+            canvas.redraw = function(){
+                this.clear();
+                var positionXCentered = -(this.imageData.width*this.zoom - this.width)/2;
+                var positionYCentered = -(this.imageData.height*this.zoom - this.height)/2;
+                var positionX = positionXCentered + (0.5 - this.position.x) * this.imageData.width*this.zoom;
+                var positionY = positionYCentered + (0.5 - this.position.y) * this.imageData.height*this.zoom;
+
+                var c = document.createElement('canvas');
+                c.width = this.imageData.width;
+                c.height = this.imageData.height;
+                c.getContext("2d").putImageData(this.imageData, 0, 0);
+                this.ctx.drawImage(c, positionX, positionY, this.imageData.width*this.zoom, this.imageData.height*this.zoom);
+//                ctx.putImageData(this.imageData, 0, 0);
+            };
+            canvas.drawImageFull = function(){
+                console.log('drawFullImage');
+
+                canvas.clear();
+
+                this.position.x = 0.5;
+                this.position.y = 0.5;
+                if (this.imageData.ratio > wdw.ratio) {
+                    this.zoom = wdw.width / this.imageData.width;
+                } else {
+                    this.zoom = wdw.height / this.imageData.height;
                 }
-            }
+                console.log(this.zoom);
+                this.redraw();
+            };
+            canvas.handleScroll = function(e) {
+                var direction = (e.detail < 0 || e.wheelDelta > 0) ? 1 : -1;
+                _this.zoom +=  _this.zoom*_this.zoomSensibility*direction;
+                _this.redraw();
+            };
+            canvas.tools = tools;
+
+
+
+            // Gestion drag and drop canvas
+            canvas.addEventListener('dragover', function(e) {
+                e.preventDefault(); // Annule l'interdiction de drop
+            }, false);
+            canvas.addEventListener('drop', function(e){
+                e.preventDefault();
+                var imgFile = e.dataTransfer.files[0];
+                var imgType = imgFile.type.split('/');
+                imgType = imgType[imgType.length - 1].toLowerCase();
+
+                if(canvas.allowedTypes.indexOf(imgType) != -1) {
+                    var img = new Image();
+                    var reader = new FileReader(); // Permet de lire l'image
+                    reader.onload = function(){
+                        img.src = this.result;
+                        img.onload = function(){
+                            canvas.addImage(img);
+                            canvas.drawImageFull();
+                        };
+                    };
+                    reader.readAsDataURL(imgFile);
+                } else{
+                    alert('Please give me an valid image');
+                }
+            });
+
+
+            // Initialisation du canvas
+            canvas.compute();
+            var ctx = canvas.ctx = canvas.getContext("2d");
 
 
             var image = new Image();
             image.src= 'images/2.jpg';
             image.onload = function(){
-                image.ratio = image.width/image.height;
 
-                canvas.drawImageFull(image);
-//                ctx.drawImage(image, 0, 0, wdw.width, wdw.height);
+                canvas.addImage(image);
+                canvas.drawImageFull();
 
-                image.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                image.pixels = image.imageData.data;
-                image.numPixels = image.imageData.width * image.imageData.height;
+                canvas.tools.negative(canvas.imageData);
+                canvas.redraw();
 
-                canvas.clear();
-                tools.negative(image);
-                ctx.putImageData(image.imageData, 0, 0);
+                wdw.onresize = function(){
+                    canvas.compute();
+                    canvas.drawImageFull();
+                };
             }
+
+            // Gestion du scroll
+            document.addEventListener('mousewheel', canvas.handleScroll);
+            document.addEventListener('DOMMouseScroll', canvas.handleScroll);
+
     </script>
 </body>
 </html>
