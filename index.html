@@ -3,15 +3,35 @@
 <head>
     <meta charset="utf-8"/>
     <title>Image Process</title>
+    <script src="js/jquery-2.1.3.min.js"></script>
     <script src="js/Introspector.js"></script>
     <script src="js/tools.js"></script>
     <script src="js/wdw.js"></script>
+    <script src="js/requestAnimFrame.js"></script>
+    <script src="js/mouse.js"></script>
     <link rel="stylesheet" type="text/css" href="css/main.css"/>
 </head>
 <body>
     <canvas id="myCanvas" class="canvas"></canvas>
+    <div class="canvas__panel canvas__panel--left">
+
+    </div>
+    <div class="canvas__panel canvas__panel--right">
+
+    </div>
+    <div class="canvas__panel canvas__panel--top">
+
+    </div>
+    <div class="canvas__panel canvas__panel--bottom">
+        <input id="canvas__zoom" type="number" min="0" max="1000" step="1" />
+    </div>
     <script>
+            var DRAG_MODE = 'drag';
+
             var _this = canvas = document.getElementById("myCanvas");
+            canvas.width = 0;
+            canvas.height = 0;
+            canvas.ratio = 1;
             canvas.imageData = {};
             canvas.zoom = 1;
             canvas.position = {
@@ -19,15 +39,45 @@
             };
             canvas.allowedTypes = ['png', 'jpg', 'jpeg', 'gif'];
             canvas.zoomSensibility = 0.1;
+            // Canvas temporaire contenant l'image actuelle à dessiner
+            canvas.tmpCanvas = document.createElement('canvas');
+            // Informe sur le type de rendu du canvas (continu ou non)
+            canvas.continuousRendering = false;
+            canvas.mode = DRAG_MODE;
+            canvas.dragged = false;
 
-            // Definition des methodes du canvas
+            // Lance le rendu en continu du canvas
+            canvas.startAnimFrame = function(){
+                _this.continuousRendering = true;
+                _this.redraw();
+                canvas.animFrameID = requestAnimationFrame(function(){
+                    _this.startAnimFrame();
+                });
+            };
+            //Stop le rendu en continu du canvas
+            canvas.stopAnimFrame = function(){
+                _this.continuousRendering = false;
+                cancelAnimationFrame(canvas.animFrameID);
+            };
+
+            // Methode permettant de recalculer les dimensions du canvas
             canvas.compute = function(){
-                this.width = wdw.width;
-                this.height = wdw.height;
+                this.width = wdw.width - this.getPanelsWidth();
+                this.height = wdw.height - this.getPanelsHeight();
+                this.ratio = this.width / this.height;
+                canvas.style.top = this.getCanvasTop()+'px';
+                canvas.style.left = this.getCanvasLeft()+'px';
             };
+
+            // Methode permettant d'effacer le canvas
             canvas.clear = function(){
+                this.ctx.save();
+                this.ctx.setTransform(1,0,0,1,0,0);
                 this.ctx.clearRect(0, 0, this.width, this.height);
+                this.ctx.restore();
             };
+
+            // Methode permettant d'ajouter une image
             canvas.addImage = function(img){
                 var c = document.createElement('canvas');
                 c.width = img.width;
@@ -39,47 +89,117 @@
                 this.imageData.pixels = this.imageData.data;
                 this.imageData.numPixels = this.imageData.width * this.imageData.height;
 
-                console.log(this.imageData);
+                // Set this imageData as default for tools
+                canvas.tools.defaultImageData = canvas.imageData;
             };
-            canvas.redraw = function(){
-                this.clear();
-                var positionXCentered = -(this.imageData.width*this.zoom - this.width)/2;
-                var positionYCentered = -(this.imageData.height*this.zoom - this.height)/2;
-                var positionX = positionXCentered + (0.5 - this.position.x) * this.imageData.width*this.zoom;
-                var positionY = positionYCentered + (0.5 - this.position.y) * this.imageData.height*this.zoom;
 
-                var c = document.createElement('canvas');
-                c.width = this.imageData.width;
-                c.height = this.imageData.height;
-                c.getContext("2d").putImageData(this.imageData, 0, 0);
-                this.ctx.drawImage(c, positionX, positionY, this.imageData.width*this.zoom, this.imageData.height*this.zoom);
-//                ctx.putImageData(this.imageData, 0, 0);
+            // Methode de redessin du canvas
+            canvas.redraw = function(imageDataChanged){
+//                console.log('redraw');
+                _this.clear();
+                _this.checkBeforeRedraw();
+
+                var positionXCentered = -(_this.imageData.width*_this.zoom - _this.width)/2;
+                var positionYCentered = -(_this.imageData.height*_this.zoom - _this.height)/2;
+                var positionX = positionXCentered + (0.5 - _this.position.x) * _this.imageData.width*_this.zoom;
+                var positionY = positionYCentered + (0.5 - _this.position.y) * _this.imageData.height*_this.zoom;
+
+                if( imageDataChanged ){
+                    console.log('redessin full');
+                    _this.tmpCanvas.width = _this.imageData.width;
+                    _this.tmpCanvas.height = _this.imageData.height;
+                    _this.tmpCanvas.getContext("2d").putImageData(_this.imageData, 0, 0);
+                }
+
+                _this.ctx.save();
+                _this.ctx.setTransform(_this.zoom, 0, 0, _this.zoom, positionX, positionY);
+                _this.ctx.drawImage(_this.tmpCanvas, 0, 0);
+                _this.ctx.restore();
             };
-            canvas.drawImageFull = function(){
+
+            canvas.checkBeforeRedraw = function(){
+                _this.checkPosition();
+                _this.checkZoom();
+            };
+            canvas.checkPosition = function(){
+                _this.position.x = _this.position.x > 1 ? 1 : _this.position.x;
+                _this.position.x = _this.position.x < 0 ? 0 : _this.position.x;
+                _this.position.y = _this.position.y > 1 ? 1 : _this.position.y;
+                _this.position.y = _this.position.y < 0 ? 0 : _this.position.y;
+            };
+            canvas.checkZoom = function(){
+                _this.zoom = _this.zoom > 10 ? 10 : _this.zoom;
+                _this.zoom = _this.zoom < 0.01 ? 0.01 : _this.zoom;
+            };
+
+            // Methode permettant de redessiner l'image dans un format optimal par rapport a la fenetre navigateur
+            canvas.drawImageFull = function(imageDataChanged){
                 console.log('drawFullImage');
 
                 canvas.clear();
 
                 this.position.x = 0.5;
                 this.position.y = 0.5;
-                if (this.imageData.ratio > wdw.ratio) {
-                    this.zoom = wdw.width / this.imageData.width;
+                if (this.imageData.ratio > canvas.ratio) {
+                    this.setZoom(canvas.width / this.imageData.width);
                 } else {
-                    this.zoom = wdw.height / this.imageData.height;
+                    this.setZoom(canvas.height / this.imageData.height);
                 }
-                console.log(this.zoom);
-                this.redraw();
+                this.redraw(imageDataChanged);
             };
+
+            // Methode implémentant le zoom
             canvas.handleScroll = function(e) {
                 var direction = (e.detail < 0 || e.wheelDelta > 0) ? 1 : -1;
-                _this.zoom +=  _this.zoom*_this.zoomSensibility*direction;
+                _this.setZoom(_this.zoom + _this.zoom*_this.zoomSensibility*direction);
                 _this.redraw();
             };
+
+            canvas.setZoom = function(val){
+                _this.zoom = val;
+                _this.checkZoom();
+                jQuery('#canvas__zoom').val(_this.getZoomPercentage());
+            };
+
+            // Methode permettant de récupérer la valeur de zoom en %
+            canvas.getZoomPercentage = function(){
+                return Math.round(this.zoom*100);
+            };
+
+            // Init tools for image transformation
             canvas.tools = tools;
 
+            canvas.getPanelsWidth = function(){
+                var width = 0;
+
+                jQuery('.canvas__panel--left, .canvas__panel--right').each(function(){
+                    width += jQuery(this).width();
+                });
+                console.log(width);
+                return width;
+            };
+
+            canvas.getPanelsHeight = function(){
+                var height = 0;
+
+                jQuery('.canvas__panel--top, .canvas__panel--bottom').each(function(){
+                    height += jQuery(this).height();
+                });
+                console.log(height);
+                return height;
+            };
+
+            canvas.getCanvasTop = function(){
+                return jQuery('.canvas__panel--top').height();
+            };
+
+            canvas.getCanvasLeft = function(){
+               return jQuery('.canvas__panel--left').width();
+            };
 
 
-            // Gestion drag and drop canvas
+
+            // Gestion drag and drop d'image sur le canvas
             canvas.addEventListener('dragover', function(e) {
                 e.preventDefault(); // Annule l'interdiction de drop
             }, false);
@@ -96,7 +216,7 @@
                         img.src = this.result;
                         img.onload = function(){
                             canvas.addImage(img);
-                            canvas.drawImageFull();
+                            canvas.drawImageFull(true);
                         };
                     };
                     reader.readAsDataURL(imgFile);
@@ -105,12 +225,43 @@
                 }
             });
 
+            canvas.dragStart = {x: 0, y: 0};
+            canvas.startDrag = function(e){
+                canvas.dragStart = mouse.getPositionOnElement(e, canvas);
+                canvas.oldPosition = {x: canvas.position.x, y: canvas.position.y};
+                canvas.dragged = true;
+                canvas.startAnimFrame();
+                canvas.addEventListener('mousemove', canvas.dragMove);
+            };
+            canvas.stopDrag = function(){
+                canvas.dragged = false;
+                canvas.stopAnimFrame();
+                canvas.removeEventListener('mousemove', canvas.dragMove);
+            };
+            canvas.dragMove = function(e){
+                console.log(canvas.dragStart);
+                var dragPosition = mouse.getPositionOnElement(e, canvas);
+                var dragVal = {
+                    x: dragPosition.x - _this.dragStart.x,
+                    y: dragPosition.y - _this.dragStart.y
+                };
+
+                console.log('canvas.oldposition.x : ' + canvas.oldPosition.x);
+                canvas.position.x = canvas.oldPosition.x - ( (dragVal.x/_this.zoom) / (_this.imageData.width));
+                canvas.position.y = canvas.oldPosition.y - ( (dragVal.y/_this.zoom) / (_this.imageData.height));
+                console.log(dragVal);
+            };
+
 
             // Initialisation du canvas
             canvas.compute();
-            var ctx = canvas.ctx = canvas.getContext("2d");
+            canvas.ctx = canvas.getContext("2d");
 
 
+
+            /////////////////////
+            // Contenu de test //
+            /////////////////////
             var image = new Image();
             image.src= 'images/2.jpg';
             image.onload = function(){
@@ -118,18 +269,45 @@
                 canvas.addImage(image);
                 canvas.drawImageFull();
 
-                canvas.tools.negative(canvas.imageData);
-                canvas.redraw();
+                canvas.tools.negative();
+                canvas.redraw(true);
+            };
 
-                wdw.onresize = function(){
-                    canvas.compute();
-                    canvas.drawImageFull();
-                };
-            }
+
+
+            ////////////////////////
+            // GESTION DES EVENTS //
+            ////////////////////////
+
+            // Gestion du redimensionnement de la fenetre navigateur
+            wdw.onresize = function(){
+                canvas.compute();
+                canvas.redraw();
+            };
+
 
             // Gestion du scroll
-            document.addEventListener('mousewheel', canvas.handleScroll);
-            document.addEventListener('DOMMouseScroll', canvas.handleScroll);
+            canvas.addEventListener('mousewheel', canvas.handleScroll);
+            canvas.addEventListener('DOMMouseScroll', canvas.handleScroll);
+
+            // Gestion du zoom input
+            jQuery('#canvas__zoom').on('change', function(){
+                canvas.setZoom(jQuery(this).val()/100);
+                canvas.redraw();
+            });
+
+            // Gestion du drag
+            canvas.addEventListener('mousedown', function(e){
+                if(canvas.mode === DRAG_MODE){
+                    console.log(e);
+                    _this.startDrag(e);
+                }
+            });
+            canvas.addEventListener('mouseup', function(e){
+                if(canvas.mode === DRAG_MODE){
+                   _this.stopDrag();
+                }
+            });
 
     </script>
 </body>
