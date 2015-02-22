@@ -1,3 +1,4 @@
+'use strict'
 var wdw = {};
 
 // Calcul des valeurs caractérisant la fenetre

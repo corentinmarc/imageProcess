@@ -1,3 +1,4 @@
+'use strict'
 var mouse={};
 
 mouse.getPositionOnElement = function(evt, el){

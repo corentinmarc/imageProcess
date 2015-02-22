@@ -14,10 +14,13 @@
 <body>
     <canvas id="myCanvas" class="canvas"></canvas>
     <div class="canvas__panel canvas__panel--left">
-
+        <select class="canvas__mode-select"></select>
     </div>
     <div class="canvas__panel canvas__panel--right">
-
+        <div class="canvas__picked-color">
+            <div class="canvas__picked-color__color"></div>
+            <p class="canvas__picked-color__text"></p>
+        </div>
     </div>
     <div class="canvas__panel canvas__panel--top">
 
@@ -26,8 +29,21 @@
         <input id="canvas__zoom" type="number" min="0" max="1000" step="1" />
     </div>
     <script>
+            'use strict'
             var DRAG_MODE = 'drag';
+            var PICK_COLOR_MODE = 'pick-color';
+            var canvasModes = [DRAG_MODE, PICK_COLOR_MODE];
 
+            var canvasSelectMode = document.getElementsByClassName('canvas__mode-select')[0];
+            canvasModes.forEach(function(el){
+                // Create Options for Mode selectbox
+                canvasSelectMode.insertAdjacentHTML('beforeend', '<option value="'+el+'">'+el+'</option>');
+            });
+            canvasSelectMode.addEventListener('change', function(e){
+                canvas.mode = this.options[this.selectedIndex].value;
+            });
+
+            var canvas;
             var _this = canvas = document.getElementById("myCanvas");
             canvas.width = 0;
             canvas.height = 0;
@@ -239,17 +255,14 @@
                 canvas.removeEventListener('mousemove', canvas.dragMove);
             };
             canvas.dragMove = function(e){
-                console.log(canvas.dragStart);
                 var dragPosition = mouse.getPositionOnElement(e, canvas);
                 var dragVal = {
                     x: dragPosition.x - _this.dragStart.x,
                     y: dragPosition.y - _this.dragStart.y
                 };
 
-                console.log('canvas.oldposition.x : ' + canvas.oldPosition.x);
                 canvas.position.x = canvas.oldPosition.x - ( (dragVal.x/_this.zoom) / (_this.imageData.width));
                 canvas.position.y = canvas.oldPosition.y - ( (dragVal.y/_this.zoom) / (_this.imageData.height));
-                console.log(dragVal);
             };
 
 
@@ -308,6 +321,50 @@
                    _this.stopDrag();
                 }
             });
+            // Add space key for Drag mode activation
+            document.addEventListener('keydown', function(e){
+                if(e.keyCode === 32){
+                    if(canvas.mode !== DRAG_MODE){
+                        canvas.oldMode = canvas.mode;
+                    }
+                    canvas.mode = DRAG_MODE;
+                }
+            });
+            document.addEventListener('keyup', function(e){
+                if(e.keyCode === 32){
+                    _this.stopDrag();
+                    if(canvas.oldMode){
+                        canvas.mode = canvas.oldMode;
+                    }
+                }
+            });
+
+            // Gestion du click
+            canvas.addEventListener('click', function(e){
+                if(canvas.mode === PICK_COLOR_MODE){
+                    var posOnCanvas = mouse.getPositionOnElement(e, canvas);
+                    var posClick = {x: (posOnCanvas.x - (0.5 * _this.width)) / _this.zoom , y: (posOnCanvas.y - (0.5 * _this.height)) / _this.zoom};
+                    var posClickOnImage = {x: Math.round(_this.position.x * _this.imageData.width + posClick.x), y: Math.round(_this.position.y * _this.imageData.height + posClick.y)}
+
+                    var pix = tools.getPixel(posClickOnImage.x, posClickOnImage.y, _this.imageData);
+                    var pixColor = rgbToHex(pix.r, pix.g, pix.b);
+                    jQuery('.canvas__picked-color__color').css({background: pixColor});
+                    jQuery('.canvas__picked-color__text').text(pixColor);
+                    console.log(posOnCanvas);
+                    console.log(posClickOnImage);
+                }
+            });
+
+
+            // Fonction de conversion vers l'hexadecimal
+            function componentToHex(c) {
+                var hex = c.toString(16);
+                return hex.length == 1 ? "0" + hex : hex;
+            }
+            function rgbToHex(r, g, b) {
+                return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+            }
+
 
     </script>
 </body>

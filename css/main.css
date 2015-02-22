@@ -49,3 +49,19 @@ body {
   height: 20px;
   width: 100%;
 }
+
+.canvas__mode-select {
+  margin-top: 50px;
+}
+
+.canvas__picked-color{
+    margin-top: 50px;
+}
+.canvas__picked-color__color{
+    box-sizing: border-box;
+    width: 90%;
+    height: 50px;
+    margin: 0 auto;
+    border: 1px solid #000;
+    background: #fff;
+}
